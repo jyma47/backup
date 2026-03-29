@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="ko">
+
+<head>
+    <meta charset="UTF-8">
+    <title>MD 파일 기반 UI</title>
+
+    <style>
+        body {
+            margin: 0;
+            display: flex;
+            height: 100vh;
+            font-family: sans-serif;
+        }
+
+        .left {
+            width: 50%;
+            border-right: 1px solid #ccc;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .title {
+            font-size: 32px;
+            font-weight: bold;
+            margin: 30px 0 10px;
+        }
+
+        .table-container {
+            width: 90%;
+            padding: 20px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            table-layout: fixed;
+            /* ⭐ 칸 크기 고정 */
+        }
+
+        td {
+            border: 1px solid #999;
+            height: 60px;
+            padding: 0;
+            cursor: pointer;
+            word-break: break-word;
+        }
+
+        td.active {
+            background-color: #ffcae5;
+            border: 2px solid #ff95df;
+            font-weight: bold;
+        }
+
+        /* ⭐ 내부 div로 가운데 정렬 처리 */
+        td div {
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+
+            text-align: center;
+            white-space: normal;
+        }
+
+        .right {
+            width: 50%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .popup {
+            width: 60%;
+            padding: 20px;
+            border: 2px solid black;
+            display: none;
+            border-radius: 10px;
+        }
+
+        .close {
+            float: right;
+            cursor: pointer;
+        }
+
+        .popup h2 {
+            margin-top: 0;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="left">
+        <div class="title">📋 조주 기능사 실기 레시피</div>
+        <div class="table-container">
+            <table>
+                <tbody id="table-body"></tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="right">
+        <div id="popup" class="popup">
+            <span class="close" onclick="closePopup()">X</span>
+            <div id="content"></div>
+        </div>
+    </div>
+
+    <script>
+        function parseMarkdown(md) {
+            const lines = md.trim().split("\n");
+
+            let html = "";
+            let inList = false;
+
+            lines.forEach(line => {
+                line = line.trim();
+                if (line.startsWith("## ")) {
+                    if (inList) {
+                        html += "</ul>";
+                        inList = false;
+                    }
+                    html += "<h3>" + line.replace("## ", "") + "</h3>";
+                }
+                else if (line.startsWith("# ")) {
+                    if (inList) {
+                        html += "</ul>";
+                        inList = false;
+                    }
+                    html += "<h2>" + line.replace("# ", "") + "</h2>";
+                }
+                else if (line.startsWith("- ")) {
+                    if (!inList) {
+                        html += "<ul>";
+                        inList = true;
+                    }
+                    html += "<li>" + line.replace("- ", "") + "</li>";
+                }
+            });
+
+            if (inList) html += "</ul>";
+
+            return html;
+        }
+
+        async function loadData() {
+            const res = await fetch("data.md");
+            const text = await res.text();
+
+            const blocks = text.trim().split(/\n\s*\n/);
+
+            return blocks.map((block) => {
+                const firstLine = block.trim().split("\n")[0];
+                const title = firstLine.replace("# ", "");
+
+                return {
+                    title: title,
+                    content: parseMarkdown(block)
+                };
+            });
+        }
+
+        const cols = 5;
+        const tbody = document.getElementById("table-body");
+
+        let current = null;
+        let currentCell = null;
+        let data = [];
+
+        async function init() {
+            data = await loadData();
+
+            let row;
+
+            data.forEach((item, index) => {
+                if (index % cols === 0) {
+                    row = document.createElement("tr");
+                    tbody.appendChild(row);
+                }
+
+                const cell = document.createElement("td");
+
+                const inner = document.createElement("div"); // ⭐ 핵심
+                inner.innerText = item.title;
+
+                cell.appendChild(inner);
+
+                cell.onclick = () => togglePopup(index, cell);
+
+                row.appendChild(cell);
+            });
+        }
+
+        init();
+
+        function togglePopup(index, element) {
+            const popup = document.getElementById("popup");
+            const content = document.getElementById("content");
+
+            if (current === index) {
+                popup.style.display = "none";
+                current = null;
+
+                if (currentCell) {
+                    currentCell.classList.remove("active");
+                    currentCell = null;
+                }
+                return;
+            }
+
+            if (currentCell) {
+                currentCell.classList.remove("active");
+            }
+
+            element.classList.add("active");
+            currentCell = element;
+
+            content.innerHTML = data[index].content;
+            popup.style.display = "block";
+            current = index;
+        }
+
+        function closePopup() {
+            document.getElementById("popup").style.display = "none";
+
+            if (currentCell) {
+                currentCell.classList.remove("active");
+                currentCell = null;
+            }
+
+            current = null;
+        }
+    </script>
+
+</body>
+
+</html>
